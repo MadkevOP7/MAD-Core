@@ -6,5 +6,5 @@ MAD Core is a collection of plugins, assets, and code APIs written for **[Phanta
 - Epic Online Services C# SDK ([Documentation](https://dev.epicgames.com/docs/services/en-US/index.html))
 
 ## License
-1. Unauthorized copying of this file, via any medium is strictly prohibited.
+1. Unauthorized copying of files contained in this repository via any medium is strictly prohibited.
 2. All rights reserved.
