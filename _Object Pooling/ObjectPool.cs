@@ -176,35 +176,36 @@ public class ObjectPool : MonoBehaviour
     public void OnPlayerGridChanged(List<int> new_active)
     {
         active_chunks = new_active;
-        //RefreshGlobalChunks();
+        RefreshGlobalChunks();
     }
-    //===============================================
-    //public void RefreshGlobalChunks()
-    //{
-    //    List<int> withNeighbors = new List<int>(active_chunks);
-    //    //Refresh Chunk active states, enable new chunks
-    //    foreach(RuntimeChunk r in chunk_regions)
-    //    {
-    //        if (active_chunks.Contains(r.chunk_id)){
-    //            withNeighbors.AddRange(r.neighbors);
-    //        }
-    //    }
 
-    //    //remove duplicate ids
-    //    withNeighbors = withNeighbors.Distinct().ToList();
+    public void RefreshGlobalChunks()
+    {
+        List<int> withNeighbors = new List<int>(active_chunks);
+        //Refresh Chunk active states, enable new chunks
+        foreach (RuntimeChunk r in chunk_regions)
+        {
+            if (active_chunks.Contains(r.chunk_id))
+            {
+                withNeighbors.AddRange(r.neighbors);
+            }
+        }
 
-    //    foreach(RuntimeChunk r in chunk_regions)
-    //    {
-    //        if (withNeighbors.Contains(r.chunk_id))
-    //        {
-    //            r.LoadChunk();
-    //        }
-    //        else
-    //        {
-    //            r.OffloadChunk();
-    //        }
-    //    }
-    //}
+        //remove duplicate ids
+        withNeighbors = withNeighbors.Distinct().ToList();
+
+        foreach (RuntimeChunk r in chunk_regions)
+        {
+            if (withNeighbors.Contains(r.chunk_id))
+            {
+                r.LoadChunk();
+            }
+            else
+            {
+                r.OffloadChunk();
+            }
+        }
+    }
 
     public bool IsEqual(List<int> a, List<int> b)
     {
