@@ -1,5 +1,5 @@
 ## MAD Core
-MAD Core is a collection of plugins, assets, and code APIs written for **[Phantasm](https://www.madkev.com/phantasm)**. MAD Core is developed with Unity Engine, C#/.NET framework (Mono), [Mirror](https://github.com/vis2k/Mirror), and [Epic Online Services](https://dev.epicgames.com/en-US/services) (EOS) transport for NAT.
+MAD Core is a collection of plugins, assets, and code APIs written for **[Phantasm](https://www.madkev.com/phantasm)**. This repo contains MAD Core code written in C#/.NET framework (Mono), developed using Unity Engine, [Mirror](https://github.com/vis2k/Mirror), and [Epic Online Services](https://dev.epicgames.com/en-US/services) (EOS) transport for NAT.
 
 ## Dependencies
 - Mirror ([Documentation](https://mirror-networking.gitbook.io/docs/))
