@@ -5,6 +5,12 @@ Written by Kevin Yang
 
 ## Key Components
 1. [AI Core](https://github.com/MadkevOP7/MAD-Core/blob/main/_AI/GhostAI.cs)
+2. [AI Brain]([https://github.com/MadkevOP7/MAD-Core/blob/main/_AI/GhostAI.cs](https://github.com/MadkevOP7/MAD-Core/blob/main/_AI/AIBrain.cs)
+3. [Building Core (Singleton)](https://github.com/MadkevOP7/MAD-Core/blob/main/_Mechanics/Building/GlobalBuild.cs)
+4. [Building Manager (Player)](https://github.com/MadkevOP7/MAD-Core/blob/main/_Mechanics/Building/BuildingManager.cs)
+5. [Equipment Core](https://github.com/MadkevOP7/MAD-Core/blob/main/_Mechanics/Equipments/EquipmentManager.cs)
+6. [Object Pooling](https://github.com/MadkevOP7/MAD-Core/blob/main/_Object%20Pooling/ObjectPool.cs)
+
 
 
 ## Dependencies
