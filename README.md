@@ -3,7 +3,7 @@ MAD Core is a collection of plugins, assets, and code APIs written for **[Phanta
 
 Written by Kevin Yang
 
-##Key Components
+## Key Components
 1. [AI Core](https://github.com/MadkevOP7/MAD-Core/blob/main/_AI/GhostAI.cs)
 
 
