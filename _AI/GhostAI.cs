@@ -65,17 +65,17 @@ public class GhostAI : NetworkBehaviour
     public Player playerCache;
     private Transform _playerTarget = null;
     public Transform playerTarget;
-    //{
-    //    get { return _playerTarget; }
-    //    set
-    //    {
-    //        if (_playerTarget != value)
-    //        {
-    //            OnPlayerTargetChanged(_playerTarget, value);
-    //            _playerTarget = value;
-    //        }
-    //    }
-    //}
+    {
+        get { return _playerTarget; }
+        set
+        {
+            if (_playerTarget != value)
+            {
+                OnPlayerTargetChanged(_playerTarget, value);
+                _playerTarget = value;
+            }
+        }
+    }
     public Transform waypointTarget;
     #endregion
 
