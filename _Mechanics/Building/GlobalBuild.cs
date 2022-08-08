@@ -213,7 +213,6 @@ public class GlobalBuild : NetworkBehaviour
     //Local Save Load to disk
     public static void Save(WorldData data)
     {
-        //No adusting minimum currently
 
         BinaryFormatter bf = new BinaryFormatter();
         FileStream stream = new FileStream(Application.persistentDataPath + FILENAME, FileMode.Create);
