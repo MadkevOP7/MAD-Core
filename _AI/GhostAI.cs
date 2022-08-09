@@ -65,17 +65,17 @@ public class GhostAI : NetworkBehaviour
     public Player playerCache;
     private Transform _playerTarget = null;
     public Transform playerTarget;
-    {
-        get { return _playerTarget; }
-        set
-        {
-            if (_playerTarget != value)
-            {
-                OnPlayerTargetChanged(_playerTarget, value);
-                _playerTarget = value;
-            }
-        }
-    }
+    //{
+    //    get { return _playerTarget; }
+    //    set
+    //    {
+    //        if (_playerTarget != value)
+    //        {
+    //            OnPlayerTargetChanged(_playerTarget, value);
+    //            _playerTarget = value;
+    //        }
+    //    }
+    //}
     public Transform waypointTarget;
     #endregion
 
@@ -260,7 +260,6 @@ public class GhostAI : NetworkBehaviour
 
             if (option == Option.a)
             {
-                Debug.Log("aaa1");
                 //Set state back to root
                 action = Action.root;
                 return;
@@ -269,8 +268,6 @@ public class GhostAI : NetworkBehaviour
             {
                 if (attacking_item == null)
                 {
-                    Debug.Log("aaa2");
-
                     //Set state back to root when lost attacking_item
                     action = Action.root;
                     return;
@@ -283,8 +280,6 @@ public class GhostAI : NetworkBehaviour
             //Validate current attacking_item
             if(attacking_item.isPickupMode)
             {
-                Debug.Log("wtf: " + attacking_item.name);
-                Debug.Log("aaa3");
 
                 attacking_item = null;
                 action = Action.root;
@@ -322,7 +317,6 @@ public class GhostAI : NetworkBehaviour
         }
         else
         {
-            Debug.Log("aaa4");
             action = Action.root;
         }
 
