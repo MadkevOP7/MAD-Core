@@ -14,7 +14,7 @@ public class GlobalBuild : NetworkBehaviour
     //Saving
     private const string FILENAME = "/World_Data.sav";
     //static int instancingQueueMax = 100;
-    private GPUInstancerPrefabManager instancer;
+    public GPUInstancerPrefabManager instancer;
     //Storage=============================
     public List<BuildItem> global_items;
     public Dictionary<string, Sprite> previews = new Dictionary<string, Sprite>();
@@ -23,6 +23,8 @@ public class GlobalBuild : NetworkBehaviour
     //====================================
     //Instancing==========================
     public Dictionary<string, GPUInstancerPrefabPrototype> instancing_dictionary = new Dictionary<string, GPUInstancerPrefabPrototype>();
+    public Dictionary<string, IBuffer> instancing_buffer = new Dictionary<string, IBuffer>();
+    private static int INSTANCING_BUFFER_SIZE = 100;
     //====================================
     #region Singleton Setup & Initialization
     public static GlobalBuild Instance { get; private set; }
@@ -98,7 +100,7 @@ public class GlobalBuild : NetworkBehaviour
             }
             uint id = obj.GetComponent<NetworkIdentity>().netId;
             built.Add(id);
-            RPCProcessInstance(item.m_name, id);
+            //RPCProcessInstance(item.m_name, id);
         }
         else
         {
@@ -125,7 +127,7 @@ public class GlobalBuild : NetworkBehaviour
             NetworkServer.Spawn(obj);
             uint id = obj.GetComponent<NetworkIdentity>().netId;
             built.Add(id);
-            RPCProcessInstance(item.m_name, id);
+            //RPCProcessInstance(item.m_name, id);
         }
         else
         {
@@ -133,23 +135,61 @@ public class GlobalBuild : NetworkBehaviour
         }
     }
 
-    [ClientRpc]
-    void RPCProcessInstance(string name, uint id)
+    //Returns -1 if not buffered, else returns the buffer index
+    public int ProcessInstance(string name, GameObject obj)
     {
-        GameObject obj = NetworkClient.spawned[id].gameObject;
         GPUInstancerPrefabPrototype prototype;
-        if(!instancing_dictionary.TryGetValue(name, out prototype))
+        if (!instancing_dictionary.TryGetValue(name, out prototype))
         {
             prototype = GPUInstancerAPI.DefineGameObjectAsPrefabPrototypeAtRuntime(instancer, obj);
+            prototype.isFrustumCulling = true;
+            prototype.isOcclusionCulling = true;
+            prototype.useOriginalShaderForShadow = false;
+            prototype.useCustomShadowDistance = true;
+            prototype.cullShadows = true;
+            prototype.shadowDistance = 18;
+            prototype.frustumOffset = 0.5f;
             prototype.enableRuntimeModifications = true;
             prototype.autoUpdateTransformData = true;
             prototype.addRemoveInstancesAtRuntime = true;
+            prototype.addRuntimeHandlerScript = false;
             instancing_dictionary.Add(name, prototype);
+            IBuffer _buffer = new IBuffer();
+            instancing_buffer.Add(name, _buffer);
         }
-        List<GameObject> objs = new List<GameObject>();
-        objs.Add(obj);
-        GPUInstancerAPI.AddInstancesToPrefabPrototypeAtRuntime(instancer, prototype, objs);
+        IBuffer buffer = instancing_buffer[name];
+        if (buffer.pointer + 1 < INSTANCING_BUFFER_SIZE)
+        {
+            buffer.queue[buffer.pointer] = obj;
+            buffer.pointer++;
+            return buffer.pointer - 1;
+        }
+        else
+        {
+            GPUInstancerAPI.AddInstancesToPrefabPrototypeAtRuntime(instancer, prototype, ProcessInstanceBuffer(buffer));
+            return -1;
+        }
+
     }
+
+    List<GameObject> ProcessInstanceBuffer(IBuffer buffer)
+    {
+        List<GameObject> b = new List<GameObject>();
+        for (int i = buffer.queue.Length - 1; i >= 0; --i)
+        {
+            if (buffer.queue[i] == null) continue;
+            b.Add(buffer.queue[i]);
+            buffer.queue[i].GetComponent<BuildItem>().isBufferedInstance = false;
+            buffer.queue[i] = null;
+        }
+        buffer.pointer = 0;
+        return b;
+    }
+    public void RemoveInstance(GPUInstancerPrefab instance)
+    {
+        GPUInstancerAPI.RemovePrefabInstance(instancer, instance, false);
+    }
+
     //=====================================================
     //Removing Objects=====================================
     [Command(requiresAuthority = false)]
@@ -161,7 +201,7 @@ public class GlobalBuild : NetworkBehaviour
             Debug.LogError("GlobalBuild: Unable to get object at position: " + position);
             return;
         }
-        built.Remove(item.GetComponent<NetworkIdentity>().netId);
+        built.Remove(item.netId);
         NetworkServer.Destroy(item.gameObject);
     }
 
@@ -184,7 +224,7 @@ public class GlobalBuild : NetworkBehaviour
     public void LoadWorld()
     {
         WorldData data = Load();
-        foreach(BuildData cache in data.build_data)
+        foreach (BuildData cache in data.build_data)
         {
             //Load data
             Build(cache.m_name, ToVector3(cache.position), ToVector3(cache.rotation), cache.isPickupMode, cache.health);
@@ -194,14 +234,14 @@ public class GlobalBuild : NetworkBehaviour
     {
         List<BuildData> cache = new List<BuildData>();
         //UI Update
-        for(int i=0; i<built.Count; i++)
+        for (int i = 0; i < built.Count; i++)
         {
             BuildItem item = NetworkClient.spawned[built[i]].gameObject.GetComponent<BuildItem>();
             BuildData d = new BuildData();
             Transform t = item.transform;
             d.m_name = item.m_name;
             d.position = ToVectorThree(t.position);
-            d.rotation = ToVectorThree(t.eulerAngles);     
+            d.rotation = ToVectorThree(t.eulerAngles);
             d.health = item.health;
             d.isPickupMode = item.isPickupMode;
             cache.Add(d);
@@ -243,11 +283,15 @@ public class GlobalBuild : NetworkBehaviour
         }
     }
 
-   
+
     #endregion
 
     #region Helper Functions
 
+    public void SetInstancingBufferSize(int size)
+    {
+        INSTANCING_BUFFER_SIZE = size;
+    }
     public VectorThree ToVectorThree(Vector3 v)
     {
         float x = v.x;
@@ -267,6 +311,14 @@ public class GlobalBuild : NetworkBehaviour
         vector.y = v.y;
         vector.z = v.z;
         return vector;
+    }
+    #endregion
+
+    #region Buffer
+    public class IBuffer
+    {
+        public int pointer = 0;
+        public GameObject[] queue = new GameObject[INSTANCING_BUFFER_SIZE];
     }
     #endregion
 }
