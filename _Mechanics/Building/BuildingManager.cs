@@ -24,10 +24,13 @@ public class BuildingManager : MonoBehaviour
     public GlobalInventory inventory;
     //public GlobalItem current; //Current item to be placed (holding) Use inventory.selected
     public BuildItem current_selection; //Raycast hit item
-    [Header("Placeable Debug")]
+    [Header("Runtime")]
     public GameObject preview;
     public PlacementPreview pr;
-
+    float y_snap;
+    float x_snap;
+    float z_snap;
+    Vector3 yOffset;
     private void Start()
     {
         inventory = GlobalInventory.Instance;
@@ -94,26 +97,20 @@ public class BuildingManager : MonoBehaviour
             {
                 #region Placement Update
                 case action.place:
-                    ////Switch mode
-                    //if (Input.GetKeyDown(KeyCode.Q))
-                    //{
-                    //    Action = action.destroy;
-                    //    CleanupPlacementPreview();
-                    //    return;
-                    //}
-                    //CleanupSelection();
+
                     if ((hit.transform != this.transform && hit.transform.parent != this.transform.parent || hit.transform.parent == null && hit.transform != this.transform) && (preview == null || hit.transform != preview.transform))
                     {
                         //Spawn preview
                         if (preview == null || pr == null)
                         {
                             BuildItem build;
-                            if (!GlobalBuild.Instance.dictionary.TryGetValue(inventory.selected.m_name, out build) && inventory.selected!=null)
+                            if (!GlobalBuild.Instance.dictionary.TryGetValue(inventory.selected.m_name, out build) && inventory.selected != null)
                             {
                                 Debug.LogError("Building Manager: Item with name " + inventory.selected.m_name + " is not found in dictionary!");
                                 return;
                             }
                             preview = Instantiate(build.gameObject, Vector3.zero, Quaternion.identity);
+                            yOffset = new Vector3(0, build.yOffset, 0);
                             Destroy(preview.GetComponent<BuildItem>());
 
                             preview.layer = 2;
@@ -127,13 +124,12 @@ public class BuildingManager : MonoBehaviour
                             {
                                 obs.enabled = false;
                             }
-                            pr.detectionMode = PlacementPreview.DetectionType.PhysicsOverlap;
+
+                            pr.detectionMode = PlacementPreview.DetectionType.None;
                             pr.selectedItem = inventory.selected;
                         }
 
-                        //All place objects are confined to 90 degree rotation like Minecraft
-
-                        var currentPos = hit.point;
+                        preview.transform.position = hit.point + yOffset;
 
                         //Calculate per object face snapping deviation
                         if (current_selection != null)
@@ -141,28 +137,57 @@ public class BuildingManager : MonoBehaviour
 
                             if (GetHitFaceAxis(hit) == current_selection.front_allignment_axis)
                             {
-
                                 preview.transform.position = (hit.normal * 0.25f) + hit.transform.position;
                             }
                             else
                             {
-                                preview.transform.position = (hit.transform.position + hit.normal);
+                                float a = Mathf.Abs(preview.transform.rotation.y - hit.transform.rotation.y);
+                                if (GetHitFaceAxis(hit) == BuildItem.Axis.y || (a > -0.1 && a < 0.1))
+                                {
+                                    preview.transform.position = (hit.transform.position + hit.normal);
+                                }
+                                else
+                                {
+                                    //Sync y
+                                    preview.transform.position = new Vector3(preview.transform.position.x, hit.transform.position.y, preview.transform.position.z) + hit.normal * 0.125f;
+                                }
                             }
 
                         }
+                        //Snap input key z
+                        if (Input.GetKey(KeyCode.Z))
+                        {
+                            if(pr.rotationState == PlacementPreview.RotationState.rotated)
+                            {
+                                preview.transform.localPosition = new Vector3(preview.transform.localPosition.x, y_snap, z_snap);
+                            }
+                            else
+                            {
+                                preview.transform.localPosition = new Vector3(x_snap, y_snap, preview.transform.localPosition.z);
+
+                            }
+                        }
                         else
                         {
-
-                            //Snap position to grid
-                            preview.transform.position = new Vector3(Mathf.RoundToInt(currentPos.x),
-                                                        Mathf.RoundToInt(currentPos.y),
-                                                        Mathf.RoundToInt(currentPos.z));
+                            y_snap = preview.transform.localPosition.y;
+                            x_snap = preview.transform.localPosition.x;
+                            z_snap = preview.transform.localPosition.z;
                         }
+                 
 
 
                         if (Input.GetKeyDown(KeyCode.R))
                         {
-                            preview.transform.Rotate(0, 90, 0);
+                            if (pr.rotationState == PlacementPreview.RotationState.defaultState)
+                            {
+                                preview.transform.Rotate(0, 90, 0);
+                                pr.rotationState = PlacementPreview.RotationState.rotated;
+                            }
+                            else
+                            {
+                                preview.transform.Rotate(0, -90, 0);
+                                pr.rotationState = PlacementPreview.RotationState.defaultState;
+                            }
                         }
                         if (Input.GetKeyDown(KeyCode.F) && pr.canPlace)
                         {
@@ -174,23 +199,13 @@ public class BuildingManager : MonoBehaviour
                 #endregion
                 #region Destroy Update
                 case action.destroy:
-                    //Switch mode
-                    //if (Input.GetKeyDown(KeyCode.Q))
-                    //{
-                    //    CleanupSelection();
-                    //    Action = action.place;
-                    //    return;
-                    //}
-                    //CleanupPlacementPreview();
+
                     if (current_selection == null || current_selection.isPickupMode) return;
                     //[TODO] Implement lobby mode (allow_world_editing) to allow this only if lobby owner allows direct world edit
                     if (current_selection != null && !current_selection.isPickupMode)
                     {
                         current_selection.ActivateOutline(Color.red);
                     }
-
-                    BuildItem b = hit.transform.GetComponent<BuildItem>();
-                    if (b == null) return;
 
                     if (Input.GetKeyDown(KeyCode.F))
                     {
