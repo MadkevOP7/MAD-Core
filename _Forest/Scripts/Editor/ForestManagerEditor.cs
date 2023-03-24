@@ -43,10 +43,16 @@ public class MADForestHelper : EditorWindow
         {
             if (GUILayout.Button("Generate Forest Chunks"))
             {
+                if (!EditorUtility.DisplayDialog("Continue? ", "This will overwrite data", "Yes", "Cancel")) return;
                 GenerateForestChunkData();
             }
 
             if (GUILayout.Button("Validate Forest Chunk Data"))
+            {
+                ValidateForestChunkData();
+            }
+
+            if (GUILayout.Button("Compress Forest Chunk Data"))
             {
                 ValidateForestChunkData();
             }
@@ -55,6 +61,7 @@ public class MADForestHelper : EditorWindow
         {
             if (GUILayout.Button("Create Default World Forest File"))
             {
+                if (!EditorUtility.DisplayDialog("Continue? ", "This will overwrite data", "Yes", "Cancel")) return;
                 CreateDefaultForestData();
             }
 
