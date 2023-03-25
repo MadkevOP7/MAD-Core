@@ -4,6 +4,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using Ceras;
 using UnityEngine;
 using System.Diagnostics;
@@ -44,6 +45,7 @@ public class ForestManager : NetworkBehaviour
 
 
     //Network Data
+    int dataReceivingProgress = 0;
     bool dataLoaded; //If everything has been loaded to start chunk refresh
     int networkPacketPtr = 0; //Pointing to current received client packet index (client side)
     int receiverDelta = 0;
@@ -51,13 +53,13 @@ public class ForestManager : NetworkBehaviour
     int timeOutDelta = 0;
     List<byte[]> serverSplitedData; //Lives on server
     List<byte[]> clientByteArrayCache; //Lives on clients
-    int maxPacketSize = 40080; //Computed by worst case (fresh forest data size in bytes / 100)
+    int maxPacketSize = 40080; //Val = 40080 Computed by worst case (fresh forest data size in bytes / 100)
     bool receiverInitialized; //Received back updated expected packet count from server, if time out connection fail
     int expectedPacketCount = -1;
     int receivedPacketCount = 0;
     bool diffComputed = false; //Server, set to true after diff fininshes
     int timeOut = 60; //60 seconds timeout
-    int packetResync = 5; //Resync a packet if not received after 5 seconds
+    int packetResync = 1; //Resync a packet if not received after 5 seconds
     byte[] diffedForestData; //Computed on server to send changed tree data to clients
     #region Singleton
     public static ForestManager Instance { get; private set; }
@@ -268,13 +270,13 @@ public class ForestManager : NetworkBehaviour
         byte[] byteData = CombineByteData(clientByteArrayCache);
 
         var ceras = new CerasSerializer();
-        var networkData = ceras.Deserialize<ForestNetworkData>(byteData);
+        var networkData = ceras.Deserialize<ForestNetworkData>(Decompress(byteData));
 
         //Set Manager data to base default data, then run diff upgrade with received network packets data
         data = ceras.Deserialize<ForestData>(File.ReadAllBytes(Application.streamingAssetsPath + D_FILENAME));
         treeData = data.data;
         //Diff received network data to user's base default data
-        foreach(var d in networkData.data)
+        foreach (var d in networkData.data)
         {
             treeData[d.treeID] = d;
         }
@@ -303,15 +305,16 @@ public class ForestManager : NetworkBehaviour
         }
         else
         {
-            CMDInitializeDataRequestFromServer(netIdentity);
+            CMDInitializeDataRequestFromServer(gameObject);
             while (!receiverInitialized)
             {
+                Debug.Log("herfe: " + receiverDelta);
                 bool retried = false;
                 if (!retried && receiverDelta >= 5)
                 {
                     //Retry after 5 seconds once just in case a rare temp connection lost
                     retried = true;
-                    CMDInitializeDataRequestFromServer(netIdentity);
+                    CMDInitializeDataRequestFromServer(gameObject);
                 }
                 if (receiverDelta >= 10) //Current receiver request timeout set to 10 seconds, should take less than 1, otherwise connection too slow
                 {
@@ -334,43 +337,44 @@ public class ForestManager : NetworkBehaviour
                     yield break;
                 }
 
-                networkPacketPtr  = 0; //Point to current request packet index
                 if (packetDelta >= packetResync)
                 {
-                    CMDRequestByteData(netIdentity, networkPacketPtr);
+                    CMDRequestByteData(networkPacketPtr);
                     packetDelta = 0;
                 }
 
+                dataReceivingProgress = Mathf.RoundToInt(((float)receivedPacketCount / expectedPacketCount) * 100);
+                //Debug.Log("Received " + receivedPacketCount + "/" + expectedPacketCount + " packets. Progress: " + ((float)receivedPacketCount / expectedPacketCount) * 100 + "%");
                 yield return new WaitForSeconds(1);
                 timeOutDelta++;
                 packetDelta++;
             }
 
-            Debug.Log("Forest network receiving packet timed out, received " + receivedPacketCount + "/" + expectedPacketCount + " packets. Ptr is at " + networkPacketPtr);
+            Debug.Log("Forest network receiving packet timed out, received " + receivedPacketCount + "/" + expectedPacketCount + " packets. Ptr is at " + networkPacketPtr + "\nProgress: " + dataReceivingProgress + "%");
             OnRequestTimedOut();
         }
 
-        
+
     }
 
     [Command(requiresAuthority = false)]
-    public void CMDRequestByteData(NetworkIdentity target, int index)
+    public void CMDRequestByteData(int index, NetworkConnectionToClient sender = null)
     {
-        RPCReceiveByteData(target.connectionToClient, serverSplitedData[index], index);
+        RPCReceiveByteData(sender, serverSplitedData[index], index);
     }
 
     [TargetRpc]
     public void RPCReceiveByteData(NetworkConnection conn, byte[] data, int packetIndex)
     {
-        if(clientByteArrayCache[packetIndex] == null || clientByteArrayCache[packetIndex].Length == 0)
+        if (clientByteArrayCache[packetIndex] == null || clientByteArrayCache[packetIndex].Length == 0)
         {
             clientByteArrayCache[packetIndex] = data;
             receivedPacketCount++;
 
-            if(networkPacketPtr + 1 < expectedPacketCount)
+            if (networkPacketPtr + 1 < expectedPacketCount)
             {
                 packetDelta = 0;
-                CMDRequestByteData(netIdentity, ++networkPacketPtr);  
+                CMDRequestByteData(++networkPacketPtr);
             }
         }
         else
@@ -381,12 +385,14 @@ public class ForestManager : NetworkBehaviour
     }
 
     [Command(requiresAuthority = false)]
-    public void CMDInitializeDataRequestFromServer(NetworkIdentity target)
+    public void CMDInitializeDataRequestFromServer(GameObject target, NetworkConnectionToClient sender = null)
     {
-        StartCoroutine(AsyncInitializeReceiver(target));
+        Debug.Log("Server received initialization request");
+        //RPCInitializeReceiver(sender, 0);
+        StartCoroutine(AsyncInitializeReceiver(sender));
     }
 
-    IEnumerator AsyncInitializeReceiver(NetworkIdentity target)
+    IEnumerator AsyncInitializeReceiver(NetworkConnectionToClient target)
     {
         while (!diffComputed)
         {
@@ -397,20 +403,30 @@ public class ForestManager : NetworkBehaviour
 
         if (segCount == 0)
         {
-            RPCInitializeReceiver(target.connectionToClient, 0);
+            RPCInitializeReceiver(target, 0);
             yield break;
         }
 
         serverSplitedData = SplitByteData(diffedForestData, segCount);
-        RPCInitializeReceiver(target.connectionToClient, segCount);
+        Debug.Log("Server sending rpc response to initialization request");
+        RPCInitializeReceiver(target, segCount);
 
     }
+
+    [Server]
+
     [TargetRpc]
     public void RPCInitializeReceiver(NetworkConnection conn, int expectedCount)
     {
+        Debug.Log("[Forest Manager][Client] Initializing receiver, expCount: " + expectedCount);
         if (!receiverInitialized)
         {
             expectedPacketCount = expectedCount;
+            //if(expectedCount > 100)
+            //{
+            //    timeOut = 120;
+            //    Debug.Log("[Forest Manager] Large packet size, increasing timeout to 120 seconds");
+            //}
             clientByteArrayCache = new List<byte[]>();
             clientByteArrayCache.AddRange(Enumerable.Repeat(default(byte[]), expectedCount));
             receiverInitialized = true;
@@ -430,17 +446,17 @@ public class ForestManager : NetworkBehaviour
         for (int i = 0; i < treeData.Length; i++)
         {
             //TEST!! Uncomment below, this is testing worst case performance where every tree is modified and thus added to network queue
-            //if (treeData[i] == defaultData.data[i]) continue;
+            if (treeData[i] == defaultData.data[i]) continue;
             networkData.data.Add(treeData[i]);
         }
 
         if (networkData.data.Count > 0)
         {
-            diffedForestData = ceras.Serialize<ForestNetworkData>(networkData);
+            diffedForestData = Compress(ceras.Serialize<ForestNetworkData>(networkData));
         }
 
         diffComputed = true;
-        Debug.Log("Diff completed with entries count: " + networkData.data.Count);
+        Debug.Log("Diff completed with entries count: " + networkData.data.Count + "\nCompressed byte[] data size is: " + diffedForestData.Length + " bytes");
     }
 
     public void InitializePool()
@@ -553,6 +569,41 @@ public class ForestManager : NetworkBehaviour
     #endregion
 
     #region Helpers
+
+    public static byte[] Compress(byte[] buffer)
+    {
+        MemoryStream ms = new MemoryStream();
+        GZipStream zip = new GZipStream(ms, CompressionMode.Compress, true);
+        zip.Write(buffer, 0, buffer.Length);
+        zip.Close();
+        ms.Position = 0;
+
+        MemoryStream outStream = new MemoryStream();
+
+        byte[] compressed = new byte[ms.Length];
+        ms.Read(compressed, 0, compressed.Length);
+
+        byte[] gzBuffer = new byte[compressed.Length + 4];
+        Buffer.BlockCopy(compressed, 0, gzBuffer, 4, compressed.Length);
+        Buffer.BlockCopy(BitConverter.GetBytes(buffer.Length), 0, gzBuffer, 0, 4);
+        return gzBuffer;
+    }
+
+    public static byte[] Decompress(byte[] gzBuffer)
+    {
+        MemoryStream ms = new MemoryStream();
+        int msgLength = BitConverter.ToInt32(gzBuffer, 0);
+        ms.Write(gzBuffer, 4, gzBuffer.Length - 4);
+
+        byte[] buffer = new byte[msgLength];
+
+        ms.Position = 0;
+        GZipStream zip = new GZipStream(ms, CompressionMode.Decompress);
+        zip.Read(buffer, 0, buffer.Length);
+
+        return buffer;
+    }
+
     public void SetTransformFromMatrixData(Transform t, Matrix4x4 matrix)
     {
         t.position = matrix.GetColumn(3);
