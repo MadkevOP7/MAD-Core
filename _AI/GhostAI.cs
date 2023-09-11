@@ -37,7 +37,7 @@ public class GhostAI : NetworkBehaviour
     public LayerMask targetMask; //For players
     public LayerMask obstacleMask; //For walls/blocks etc
     protected LayerMask doorMask;
-    protected LayerMask exludeSelfMask; //Everything except Ghost layer
+    protected LayerMask excludeSelfMask; //Everything except Ghost layer
     [Range(0, 360)]
     public float viewAngle = 145f;
     static int DEFAULT_LEANING_PERCENTAGE = 35;
@@ -90,7 +90,7 @@ public class GhostAI : NetworkBehaviour
 
         agent.autoBraking = false;
         doorMask = LayerMask.GetMask("Door");
-        exludeSelfMask = ~LayerMask.GetMask("Ghost");
+        excludeSelfMask = ~LayerMask.GetMask("Ghost");
         SetSpeed(normalSpeed);
         globalWaypoint = GlobalWaypoint.Instance;
 
@@ -672,21 +672,74 @@ public class GhostAI : NetworkBehaviour
     protected AITargetValidationResult ValidateTarget(Transform target)
     {
         Vector3 tPos = target.position;
-        Vector3 dirToTarget = (tPos - transform.position).normalized;
-        RaycastHit info;
+
         if (IsInViewFrustum(tPos))
         {
-            float dstToTarget = Vector3.Distance(transform.position, tPos);
-            if (!Physics.Raycast(CalculateVisionPosition(), dirToTarget, out info, dstToTarget, exludeSelfMask))
+            //09/10/2023, re-factored to InternalCheckForVisionBlockage() for more accurate multple ray cast check.
+            //if (!Physics.Raycast(CalculateVisionPosition(), dirToTarget, out info, dstToTarget, excludeSelfMask))
+            //{
+            //    return new AITargetValidationResult(true, CanReachTarget(tPos), null);
+            //}
+            Transform _obstacle;
+            if(InternalCheckForVisionBlockage(target, out _obstacle))
             {
                 return new AITargetValidationResult(true, CanReachTarget(tPos), null);
             }
 
-            return new AITargetValidationResult(false, CanReachTarget(tPos), info.collider.transform);
+            //Debug.LogError("AI Obstacle: " + _obstacle.transform.gameObject.name);
+            return new AITargetValidationResult(false, CanReachTarget(tPos), _obstacle);
         }
         return new AITargetValidationResult(false, CanReachTarget(tPos), null);
     }
 
+    /// <summary>
+    /// Internal function for validating if target is blocked by obstacle and cannot be seen by AI.
+    /// This checks for partial blockage by offsetting multiple ray casts up/down, left/right from the ray directly to target.
+    /// Increasing the number of rays could lead to higher accuracy but more performance hit.
+    /// </summary>
+    /// <param name="target"></param>
+    /// <param name="obstacle"></param>
+    /// <returns>true if target can be seen by AI, false otherwise</returns>
+    protected virtual bool InternalCheckForVisionBlockage(Transform target, out Transform obstacle)
+    {
+        Vector3 toTarget = target.position - transform.position;
+
+        // Define the number of ray casts and the angle step for horizontal and vertical scans.
+        int horizontalRays = 5; // Number of horizontal rays
+        int verticalRays = 3;   // Number of vertical rays
+
+        float horizontalStep = 5.0f; // Angle step for horizontal rays
+        float verticalStep = 15.0f;  // Angle step for vertical rays
+
+        // Calculate the initial ray direction (straight towards the target).
+        Vector3 initialRayDirection = toTarget.normalized;
+        float dstToTarget = Vector3.Distance(transform.position, target.position);
+
+        RaycastHit info;
+        obstacle = null;
+        for (int h = 0; h < horizontalRays; h++)
+        {
+            for (int v = 0; v < verticalRays; v++)
+            {
+                float horizontalOffset = (horizontalRays > 1) ? (-horizontalStep * 0.5f + h * horizontalStep / (horizontalRays - 1)) : 0.0f;
+                float verticalOffset = (verticalRays > 1) ? (-verticalStep * 0.5f + v * verticalStep / (verticalRays - 1)) : 0.0f;
+
+                Vector3 rayDirection = Quaternion.Euler(verticalOffset, horizontalOffset, 0) * initialRayDirection;
+
+
+                if (!Physics.Raycast(CalculateVisionPosition(), rayDirection, out info, dstToTarget, excludeSelfMask))
+                {
+                    obstacle = null;
+                    return true;
+                }
+
+                //Update obstacle, currently we update each time so the last obstacle will be returned
+                obstacle = info.collider.transform;
+            }
+        }
+
+        return false;
+    }
     /// <summary>
     /// Returns current waypoint.next, if current or current.next is null, picks a random waypoint.
     /// </summary>
