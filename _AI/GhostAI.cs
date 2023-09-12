@@ -37,6 +37,8 @@ public class GhostAI : NetworkBehaviour
     public LayerMask targetMask; //For players
     public LayerMask obstacleMask; //For walls/blocks etc
     protected LayerMask doorMask;
+
+    [SerializeField]
     protected LayerMask excludeSelfMask; //Everything except Ghost layer
     [Range(0, 360)]
     public float viewAngle = 145f;
@@ -90,7 +92,8 @@ public class GhostAI : NetworkBehaviour
 
         agent.autoBraking = false;
         doorMask = LayerMask.GetMask("Door");
-        excludeSelfMask = ~LayerMask.GetMask("Ghost");
+
+        excludeSelfMask = ~(LayerMask.GetMask("Ghost") | LayerMask.GetMask("Ignore Raycast"));
         SetSpeed(normalSpeed);
         globalWaypoint = GlobalWaypoint.Instance;
 
