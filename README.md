@@ -19,4 +19,4 @@ Written by Kevin Yang
 
 ## License
 1. Unauthorized copying of files contained in this repository via any medium is strictly prohibited.
-2. All rights reserved.
+2. © 2024 MADKEV Studio, LLC. All rights reserved.
