@@ -31,18 +31,14 @@ public class HostManagerUI : MonoBehaviour
         }
     }
 
-    public void DisplayProgressBar(float progress)
+    public void DisplayProgressBar(float progress, float maxHealth)
     {
         if (!pObj.activeInHierarchy)
         {
             pObj.SetActive(true);
         }
 
-        s_progress.value = progress/100f;
-        
-  
-
-        
+        s_progress.value = progress/maxHealth;  
     }
 
     public void HideProgressBar()
