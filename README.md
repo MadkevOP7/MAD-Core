@@ -18,5 +18,5 @@ Written by Kevin Yang
 - Epic Online Services C# SDK ([Documentation](https://dev.epicgames.com/docs/services/en-US/index.html))
 
 ## License
-1. Unauthorized copying of files contained in this repository via any medium is strictly prohibited.
+1. This repository is intended to be read-only; copying and/or redistributing files contained in this repository via any medium is strictly prohibited.
 2. © 2024 MADKEV Studio, LLC. All rights reserved.
