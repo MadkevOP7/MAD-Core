@@ -64,6 +64,7 @@ public class EquipmentManager : NetworkBehaviour
     //Equipment Manager must store Rewired Player reference, as in Lobby we don't have GameManager but Tablet is used
     private Rewired.Player RPlayer;
     #region Getter
+    public Equipment GetCurrentEquipment() { return mCurrentEquipment; }
     public List<Equipment> GetEquipmentList() { return mPlayerEquipmentCache; }
     public Equipment GetObserveTablet()
     {
@@ -394,7 +395,6 @@ public class EquipmentManager : NetworkBehaviour
         if (mPlayerEquipmentCache.Count < OSAppInventory.MAX_LOADOUT_SIZE)
         {
             e.OnPickedUpLocalPlayer();
-            e.isCreatedFromSave = false;
             mPlayerEquipmentCache.Add(e);
             Equip(mPlayerEquipmentCache.IndexOf(e));
             //Play equip audio
@@ -803,9 +803,9 @@ public class EquipmentManager : NetworkBehaviour
     [Command(requiresAuthority = false)]
     public void CMDEquip(Equipment e)
     {
-        e.visible = true;
+        e.SetIsVisible(true);
         e.ServerSetCanPickUp(false);
-        e.mActiveUsingPlayerId = netId;
+        e.SetActiveUsingPlayerId(netId);
 
         // This is needed to let clients change the attachment transform to specific equipment instruction
         // Change is reflected to all client copies of the Player, not equipment, thus call from here
@@ -817,7 +817,7 @@ public class EquipmentManager : NetworkBehaviour
     [Command(requiresAuthority = false)]
     public void ServerShow(Equipment e, bool visible)
     {
-        e.visible = visible;
+        e.SetIsVisible(visible);
     }
 
     [TargetRpc]

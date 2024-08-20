@@ -46,7 +46,7 @@ public class MultiStackEquipment : Equipment
         mCount--;
         if (mCount <= 0)
         {
-            visible = false;
+            mIsVisible = false;
         }
     }
     [Command(requiresAuthority = false)]

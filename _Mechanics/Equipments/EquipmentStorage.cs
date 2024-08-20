@@ -93,8 +93,7 @@ public class EquipmentStorage : NetworkBehaviour
         //temp.SetActive(false);
         NetworkServer.Spawn(temp);
         Equipment equipment = temp.GetComponent<Equipment>();
-        equipment.id = id;
-        equipment.isCreatedFromSave = true;
+        equipment.SetID(id);
 
         if (type == 0)
         {
@@ -128,11 +127,11 @@ public class EquipmentStorage : NetworkBehaviour
 
         Player player = NetworkClient.spawned[conn].GetComponent<Player>();
         GameObject temp = Instantiate(GlobalContainer.GetInstance().globalEquipments[id].gameObject);
-        temp.GetComponent<Equipment>().originPlayer = player.gameObject;
+        temp.GetComponent<Equipment>().SetOriginPlayer(player.gameObject);
 
         NetworkServer.Spawn(temp);
         Equipment equipment = temp.GetComponent<Equipment>();
-        equipment.id = id;
+        equipment.SetID(id);
 
         //equipment.player = player;
         //equipment.p_follow = player.netId;
@@ -157,10 +156,10 @@ public class EquipmentStorage : NetworkBehaviour
         Player player = NetworkClient.spawned[conn].GetComponent<Player>();
         int id = FindID(TABLET_NAME); //DO NOT CHANGE THIS EQUIPMENT NAME
         GameObject temp = Instantiate(GlobalContainer.GetInstance().globalEquipments[id].gameObject);
-        temp.GetComponent<Equipment>().originPlayer = player.gameObject;
+        temp.GetComponent<Equipment>().SetOriginPlayer(player.gameObject);
         NetworkServer.Spawn(temp);
         Equipment equipment = temp.GetComponent<Equipment>();
-        equipment.id = id;
+        equipment.SetID(id);
 
         //temp.SetActive(false);
         //Equipment equipment = temp.GetComponent<Equipment>();
@@ -239,7 +238,7 @@ public class EquipmentStorage : NetworkBehaviour
                 EquipmentData d = new EquipmentData();
                 d.position = ToVectorThree(e.transform.position);
                 d.rotation = ToVectorThree(e.transform.eulerAngles);
-                d.id = e.id;
+                d.id = e.GetID();
                 if (e.GetIsPlaced())
                 {
                     d.type = 0;

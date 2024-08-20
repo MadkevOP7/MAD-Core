@@ -20,43 +20,43 @@ public class Equipment : NetworkBehaviour
     }
     #endregion
 
-    #region Invisible Public & Privates
-    [HideInInspector]
-    [SyncVar(hook = nameof(HookAddEquipmentToOriginPlayerEquipmentList))]
-    public GameObject originPlayer;
+    #region RUNTIME FIELDS
+    [SyncVar(hook = nameof(HookPlacementPos))]
+    private Vector3 mPlacementPosition;
+    [SyncVar(hook = nameof(HookPlacementRot))]
+    private Quaternion mPlacementRotation;
+    private int mID = -1; // For EquipmentStorage and save/load
+    [SyncVar(hook = nameof(HookActiveUserPlayerIDChanged))]
+    private uint mActiveUsingPlayerId; // On the server, change this for updating owner
+    [SyncVar(hook = nameof(HookOnCanPickUpChanged))]
+    private bool mCanPickUp = true; //Start with true so first equip can trigger hook
+    private Vector3 mDisconnectionDropPosition;
+    private bool mIsBinded; // For determining when the first player has binded, then if the player becomes null equipment drops (player disconnect)
+    private AudioSource mInternalAudioSource;
+    private Transform mSocketTarget;
+    [SyncVar(hook = nameof(HookOnBatteryAmountChanged))]
+    private uint mBatteryAmount = 100;
+    private bool canUse; //Holds LocalPlayer can USe
+    //Cache for time frame change, we cache originally inactive components
+    //When player changes to past, need to enable things and disable originally disabled components
+    private List<Renderer> mOriginallyInactiveRendererCache = new List<Renderer>();
+    private List<AudioSource> mOriginallyInactiveAudioSourceCache = new List<AudioSource>();
 
+    [SyncVar(hook = nameof(HookAddEquipmentToOriginPlayerEquipmentList))]
+    protected GameObject mOriginPlayer;
     // The reference to the current player, set from hook of the p_follow
     protected Player mCurrentHoldingPlayer;
-
-    [HideInInspector]
-    public int id = -1; //For EquipmentStorage and save/load
-
-    [HideInInspector]
-    [SyncVar(hook = nameof(HookPlacementPos))]
-    public Vector3 placement_pos;
-    [HideInInspector]
-    [SyncVar(hook = nameof(HookPlacementRot))]
-    public Quaternion placement_rot;
-    [Header("Runtime")]
-    [HideInInspector]
     [SyncVar(hook = nameof(HookVisible))]
-    public bool visible;
-    [HideInInspector]
-    public bool binded; //for determining when the first player has binded, then if the player becomes null equipment drops (player disconnect)
-    [HideInInspector]
-    [SyncVar(hook = nameof(HookActiveUserPlayerIDChanged))]
-    public uint mActiveUsingPlayerId; //On the server, change this for updating owner
-    [HideInInspector]
-    public Transform follow;
-    [HideInInspector]
-    public Vector3 disconnect_drop_pos; //Last follow pos
-    [SyncVar(hook = nameof(HookOnCanPickUpChanged))]
-    private bool canPickUp = true; //Start with true so first equip can trigger hook
-    [HideInInspector]
-    public bool isCreatedFromSave = false; //On the server only, do not sync
-    protected AudioSource mInternalAudioSource;
+    protected bool mIsVisible;
+    [SyncVar(hook = nameof(HookOnEquipmentTurnedOnStateChanged))]
+    protected bool mIsTurnedOn = false;
+    protected List<ControlHintInstruction> mControlHints = new List<ControlHintInstruction>();
+    protected bool mIsPlaced; //For placeable equipments, local
+    protected BoxCollider mBoxCollider;
+    protected Rigidbody mRigidBody;
     #endregion
 
+    #region SETUP FIELDS
     [Header("Equipment Info")]
     public Sprite m_image;
     public string m_name = "Default Equipment";
@@ -74,6 +74,10 @@ public class Equipment : NetworkBehaviour
     public float placement_offset = 2f; //Placement deviation from wall, etc Moves in the direction of facing (v3.forward)
     public int HandIKType = 0;
     public bool useBattery = true;
+    [Header("Initialization Storage")]
+    public Vector3 position;
+    public Vector3 rotation;
+    #endregion
 
     // EVENTS
     // Invoked from hook
@@ -82,24 +86,6 @@ public class Equipment : NetworkBehaviour
     // Invoked on each client when equipment is equipped or unequipped. When unequipped the equipment "disappears“ hence visibility change
     public event Action<bool> OnClientEquippedVisibilityChanged;
     //0 = default phone hand IK raise, 1 = Motion Detector grab -1 = none
-    [Header("Initialization Storage")]
-    public Vector3 position;
-    public Vector3 rotation;
-
-    [Header("Runtime")]
-    [SyncVar(hook = nameof(HookOnEquipmentTurnedOnStateChanged))]
-    protected bool mIsTurnedOn = false;
-    protected List<ControlHintInstruction> mControlHints = new List<ControlHintInstruction>();
-    protected bool mIsPlaced; //For placeable equipments, local
-    protected BoxCollider mBoxCollider;
-    protected Rigidbody mRigidBody;
-    [SyncVar(hook = nameof(HookOnBatteryAmountChanged))]
-    private uint mBatteryAmount = 100;
-    private bool canUse; //Holds LocalPlayer can USe
-    //Cache for time frame change, we cache originally inactive components
-    //When player changes to past, need to enable things and disable originally disabled components
-    private List<Renderer> originallyInactiveRendererCache = new List<Renderer>();
-    private List<AudioSource> originallyInactiveAudioSourceCache = new List<AudioSource>();
 
     public virtual void Awake()
     {
@@ -175,7 +161,7 @@ public class Equipment : NetworkBehaviour
         }
 
         //Local player view syncs in Update
-        if (visible && !canPickUp)
+        if (mIsVisible && !mCanPickUp)
         {
             Sync();
         }
@@ -183,20 +169,12 @@ public class Equipment : NetworkBehaviour
         //This needs to be set on all clients
         InternalUpdateDisconnectPosition();
     }
-    public override void OnStartServer()
-    {
-        base.OnStartServer();
-        if (!isCreatedFromSave)
-        {
-            HookVisible(false, false);
-        }
 
-    }
     private void OnCollisionEnter(Collision collision)
     {
         // Only fire when equipment is in dropped state and is not RC Equipment as RC would cause false positives because of WheelCollision
         // Thus, for RC only fire if collision side is not bottom
-        if (canPickUp && (!GetIsRCEquipment() || Vector3.Dot(collision.GetContact(0).normal, Vector3.up) <= RC_EQUIPMENT_UP_COLLISION_SIDE_DOT_PRODUCT_THRESHOLD))
+        if (mCanPickUp && (!GetIsRCEquipment() || Vector3.Dot(collision.GetContact(0).normal, Vector3.up) <= RC_EQUIPMENT_UP_COLLISION_SIDE_DOT_PRODUCT_THRESHOLD))
         {
             //Hits ground
             //7 is player layer: LayerMask.nametolayer optimization
@@ -222,9 +200,9 @@ public class Equipment : NetworkBehaviour
 
     void InternalUpdateDisconnectPosition()
     {
-        if (follow != null)
+        if (mSocketTarget != null)
         {
-            disconnect_drop_pos = follow.transform.position;
+            mDisconnectionDropPosition = mSocketTarget.transform.position;
         }
     }
 
@@ -233,9 +211,9 @@ public class Equipment : NetworkBehaviour
     void InternalCheckDisconnect()
     {
         //If equipment owner disconnects, drop the equipment
-        if (mCurrentHoldingPlayer == null && binded)
+        if (mCurrentHoldingPlayer == null && mIsBinded)
         {
-            binded = false;
+            mIsBinded = false;
             if (!is_permanent)
             {
                 ServerSetCanPickUp(true); //Sets can pickup, which drops equipment
@@ -287,11 +265,11 @@ public class Equipment : NetworkBehaviour
     {
         if (HandIKType == -1)
         {
-            follow = mCurrentHoldingPlayer.GetCharacter().GetShoulderMount();
+            mSocketTarget = mCurrentHoldingPlayer.GetCharacter().GetShoulderMount();
         }
         else
         {
-            follow = mCurrentHoldingPlayer.GetCharacter().GetHandEquipmentAttachment();
+            mSocketTarget = mCurrentHoldingPlayer.GetCharacter().GetHandEquipmentAttachment();
         }
     }
     protected void HookOnEquipmentTurnedOnStateChanged(bool oldVal, bool newVal)
@@ -307,7 +285,7 @@ public class Equipment : NetworkBehaviour
         OnRefreshClient();
         if (mCurrentHoldingPlayer.isLocalPlayer)
             OnRefreshLocalPlayer();
-        binded = true;
+        mIsBinded = true;
     }
 
     public virtual void HookOnBatteryAmountChanged(uint oldVal, uint newVal)
@@ -321,23 +299,23 @@ public class Equipment : NetworkBehaviour
     }
     public void Sync()
     {
-        if (!visible)
+        if (!mIsVisible)
         {
             return;
         }
 
         if (!mIsPlaced)
         {
-            if (!follow && mCurrentHoldingPlayer)
+            if (!mSocketTarget && mCurrentHoldingPlayer)
             {
                 UpdateFollowTarget();
             }
 
             // We still need to make sure here that follow isn't null as the mCurrentHoldingPlayer could've been null as well
-            if (follow)
+            if (mSocketTarget)
             {
-                transform.position = follow.position;
-                transform.rotation = follow.rotation;
+                transform.position = mSocketTarget.position;
+                transform.rotation = mSocketTarget.rotation;
             }
         }
     }
@@ -377,15 +355,15 @@ public class Equipment : NetworkBehaviour
     [Command(requiresAuthority = false)]
     public void ServerPlaceItem(Vector3 pos, Quaternion rot)
     {
-        placement_pos = pos;
-        placement_rot = rot;
+        mPlacementPosition = pos;
+        mPlacementRotation = rot;
     }
 
     public void HookPlacementPos(Vector3 oldVal, Vector3 newVal)
     {
         transform.position = newVal;
         mIsPlaced = true;
-        UpdateRotationClient(placement_rot);
+        UpdateRotationClient(mPlacementRotation);
     }
 
     public void HookPlacementRot(Quaternion oldVal, Quaternion newVal)
@@ -418,7 +396,7 @@ public class Equipment : NetworkBehaviour
             {
                 SetEquipmentStatus(true, false, true, true, false, LIMENDefine.TAG_EQUIPMENT);
                 mRigidBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic; // Ensure dynamic collision detection
-                transform.position = disconnect_drop_pos;
+                transform.position = mDisconnectionDropPosition;
                 ApplyDropPhysics();
             }
         }
@@ -451,9 +429,6 @@ public class Equipment : NetworkBehaviour
 
     private void ApplyDropPhysics()
     {
-        if (isCreatedFromSave)
-            return;
-
         Vector3 forwardDir = mCurrentHoldingPlayer != null ? mCurrentHoldingPlayer.transform.forward : transform.forward;
         Vector3 upwardDir = mCurrentHoldingPlayer != null ? mCurrentHoldingPlayer.transform.up : transform.up;
         mRigidBody.AddForce(forwardDir * 4, ForceMode.Impulse);
@@ -469,14 +444,14 @@ public class Equipment : NetworkBehaviour
     [Command(requiresAuthority = false)]
     public void ServerSetCanPickUp(bool state)
     {
-        canPickUp = state;
-        visible = true;
-        Debug.Log(m_name + " has been set as pickup able: " + canPickUp);
+        mCanPickUp = state;
+        mIsVisible = true;
+        Debug.Log(m_name + " has been set as pickup able: " + mCanPickUp);
     }
 
     public bool IsPickupable()
     {
-        return canPickUp;
+        return mCanPickUp;
     }
 
     #region Late Join Force Resync
@@ -606,8 +581,8 @@ public class Equipment : NetworkBehaviour
         if (!visible)
         {
             //We are going to be disabling components, clear cache as we will need recompute
-            originallyInactiveRendererCache.Clear();
-            originallyInactiveAudioSourceCache.Clear();
+            mOriginallyInactiveRendererCache.Clear();
+            mOriginallyInactiveAudioSourceCache.Clear();
         }
 
         //GetComponent<T>(bool includeInactive) -> the include inactive is for searching on inactive GameObjects
@@ -619,7 +594,7 @@ public class Equipment : NetworkBehaviour
             if (!visible && !renderer.enabled)
             {
                 //If we are going to set things to disabled, and this component is already disabled, add to originallyDisabled cache
-                originallyInactiveRendererCache.Add(renderer);
+                mOriginallyInactiveRendererCache.Add(renderer);
             }
 
             renderer.enabled = visible;
@@ -630,7 +605,7 @@ public class Equipment : NetworkBehaviour
             if (!visible && !audio.enabled)
             {
                 //If we are going to set things to disabled, and this component is already disabled, add to originallyDisabled cache
-                originallyInactiveAudioSourceCache.Add(audio);
+                mOriginallyInactiveAudioSourceCache.Add(audio);
             }
 
             audio.enabled = visible;
@@ -639,12 +614,12 @@ public class Equipment : NetworkBehaviour
         if (visible)
         {
             //If we just set everything to visible, we need to re-disable originally inactive components
-            foreach (Renderer renderer in originallyInactiveRendererCache)
+            foreach (Renderer renderer in mOriginallyInactiveRendererCache)
             {
                 renderer.enabled = false;
             }
 
-            foreach (AudioSource audio in originallyInactiveAudioSourceCache)
+            foreach (AudioSource audio in mOriginallyInactiveAudioSourceCache)
             {
                 audio.enabled = false;
             }
@@ -707,8 +682,7 @@ public class Equipment : NetworkBehaviour
     /// <returns></returns>
     public Collider GetColliderNonRaceConditionSafe() { return mBoxCollider; }
     public List<ControlHintInstruction> GetControlHints() { return mControlHints; }
-    public bool GetCanPickUp() { return canPickUp; }
-    public void SetCanUse(bool val) { canUse = val; }
+    public bool GetCanPickUp() { return mCanPickUp; }
 
     /// <summary>
     /// Returns true if this equipment can be used on the client, also checks for battery if the equipment uses it
@@ -718,6 +692,12 @@ public class Equipment : NetworkBehaviour
     {
         return canUse && (!useBattery || GetHasBatteryLeft());
     }
+    public int GetID() { return mID; }
+    public void SetActiveUsingPlayerId(uint id) { mActiveUsingPlayerId = id; }
+    public void SetIsVisible(bool state) { mIsVisible = state; }
+    public void SetOriginPlayer(GameObject player) { mOriginPlayer = player; }
+    public void SetCanUse(bool val) { canUse = val; }
+    public void SetID(int id) { mID = id; }
     #endregion
 
     /// <summary>
@@ -727,6 +707,16 @@ public class Equipment : NetworkBehaviour
     public void CMDToggleEquipmentOnOffState()
     {
         ServerSetEquipmentTurnedOnState(!mIsTurnedOn);
+    }
+
+    /// <summary>
+    /// [Command] Drains the battery, can be called from client
+    /// </summary>
+    /// <param name="amount"></param>
+    [Command(requiresAuthority = false)]
+    public void CMDDepleteBattery(uint amount)
+    {
+        ServerDepleteBattery(amount);
     }
 
     [Server]
