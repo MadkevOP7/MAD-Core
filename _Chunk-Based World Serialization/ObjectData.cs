@@ -29,8 +29,4 @@ public class ObjectData
     public int reward_id;
 }
 
-[Serializable]
-public class VectorThree
-{
-    public float x, y, z;
-}
+
