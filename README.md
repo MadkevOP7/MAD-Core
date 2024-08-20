@@ -1,5 +1,5 @@
 ## MAD Core
-MAD Core is a collection of plugins, assets, and code APIs written for **[Limen](https://www.madkev.com/limen)**. This repo contains MAD Core code written in C#/.NET framework (Mono), developed using [Unity](https://docs.unity3d.com/Manual/index.html), [Mirror](https://github.com/vis2k/Mirror), and [Epic Online Services](https://dev.epicgames.com/en-US/services) (EOS) transport for NAT.
+MAD Core is a collection of assets written for **[Limen](https://www.madkev.com/limen)** and taken directly from the LIMEN codebase written in C#/.NET framework (Mono), developed using [Unity](https://docs.unity3d.com/Manual/index.html), [Mirror](https://github.com/vis2k/Mirror), and [Epic Online Services](https://dev.epicgames.com/en-US/services) (EOS) transport for NAT.
 
 Written by Kevin Yang
 
